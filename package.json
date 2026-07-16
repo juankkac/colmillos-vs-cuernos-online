@@ -1,0 +1,16 @@
+{
+  "name": "colmillos-vs-cuernos-online",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Servidor multijugador de Colmillos vs. Cuernos",
+  "main": "servidor_multijugador.js",
+  "scripts": {
+    "start": "node servidor_multijugador.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

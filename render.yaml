@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: colmillos-vs-cuernos-online
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
