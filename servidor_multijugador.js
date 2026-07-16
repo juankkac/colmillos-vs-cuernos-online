@@ -162,7 +162,7 @@ function resolveOnlineBattle(room){
   const scaled=u=>({max:Math.round(u.hp*(1+(u.level-1)*.1)),atk:u.atk*(1+(u.level-1)*.1),def:u.def*(1+(u.level-1)*.1),spd:u.spd*(1+(u.level-1)*.1)}),sa=scaled(a),sb=scaled(b),hp=[sa.max,sb.max],stats=[sa,sb],log=[];
   for(let turn=1;turn<=60&&hp[0]>0&&hp[1]>0;turn++){
     let first=stats[0].spd>=stats[1].spd?0:1;
-    for(const i of [first,1-first]){let j=1-i;if(hp[i]<=0||hp[j]<=0)continue;let attacker=i?a:b,defender=j?a:b,rel=relation(attacker,defender),crit=Math.random()<.12,damage=Math.max(3,Math.round((stats[i].atk*(rel>0?1.15:1)*(crit?1.5:1)-stats[j].def*.4)+(Math.random()*4-2)));hp[j]-=damage;log.push({turn,attacker:attacker.id,defender:defender.id,damage,critical:crit,hp:Math.max(0,hp[j]),max:stats[j].max})}
+    for(const i of [first,1-first]){let j=1-i;if(hp[i]<=0||hp[j]<=0)continue;let attacker=i===0?a:b,defender=j===0?a:b,rel=relation(attacker,defender),crit=Math.random()<.12,damage=Math.max(3,Math.round((stats[i].atk*(rel>0?1.15:1)*(crit?1.5:1)-stats[j].def*.4)+(Math.random()*4-2)));hp[j]-=damage;log.push({turn,attacker:attacker.id,defender:defender.id,damage,critical:crit,hp:Math.max(0,hp[j]),max:stats[j].max})}
   }
   let loser=hp[0]<=0?1:2,winner=loser===1?2:1,L=loser===1?a:b,W=winner===1?a:b;L.livesLeft--;if(L.livesLeft<=0)L.eliminated=true;gainXp(W,2);gainXp(L,1);
   w.over=w.units[loser].every(u=>u.eliminated);if(w.over)room.rematchVotes={};let result={...publicWar(room),chosen:{1:a.id,2:b.id},winner,loser,log,finalHp:{1:Math.max(0,hp[0]),2:Math.max(0,hp[1])},maxHp:{1:sa.max,2:sb.max},warOver:w.over};
