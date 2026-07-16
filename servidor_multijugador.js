@@ -109,6 +109,19 @@ wss.on('connection', ws => {
       if(room.war.continued.size===2)startChoice(room,15);
       return;
     }
+    if(message.type==='rematch_vote'){
+      const room=rooms.get(ws.roomCode);if(!room||!room.war||!room.war.over)return;
+      const mode=message.mode==='same'?'same':'new';room.rematchVotes=room.rematchVotes||{};room.rematchVotes[ws.playerNumber]=mode;
+      room.players.forEach(p=>send(p.ws,'rematch_status',{votes:Object.keys(room.rematchVotes).map(Number),you:p.number}));
+      if(room.rematchVotes[1]&&room.rematchVotes[2]){
+        if(room.rematchVotes[1]==='same'&&room.rematchVotes[2]==='same'){
+          initializeWar(room);room.players.forEach(p=>send(p.ws,'teams_locked',{you:p.number,teams:room.teams}));setTimeout(()=>startChoice(room,60),700);
+        }else{
+          clearTimeout(room.choiceTimer);room.teams={};room.war=null;room.rematchVotes={};room.players.forEach(p=>send(p.ws,'new_team_selection',{you:p.number}));
+        }
+      }
+      return;
+    }
     if (message.type === 'game_event') {
       const room = rooms.get(ws.roomCode);
       if (!room) return;
@@ -152,7 +165,7 @@ function resolveOnlineBattle(room){
     for(const i of [first,1-first]){let j=1-i;if(hp[i]<=0||hp[j]<=0)continue;let attacker=i?a:b,defender=j?a:b,rel=relation(attacker,defender),crit=Math.random()<.12,damage=Math.max(3,Math.round((stats[i].atk*(rel>0?1.15:1)*(crit?1.5:1)-stats[j].def*.4)+(Math.random()*4-2)));hp[j]-=damage;log.push({turn,attacker:attacker.id,defender:defender.id,damage,critical:crit,hp:Math.max(0,hp[j]),max:stats[j].max})}
   }
   let loser=hp[0]<=0?1:2,winner=loser===1?2:1,L=loser===1?a:b,W=winner===1?a:b;L.livesLeft--;if(L.livesLeft<=0)L.eliminated=true;gainXp(W,2);gainXp(L,1);
-  w.over=w.units[loser].every(u=>u.eliminated);let result={...publicWar(room),chosen:{1:a.id,2:b.id},winner,loser,log,finalHp:{1:Math.max(0,hp[0]),2:Math.max(0,hp[1])},maxHp:{1:sa.max,2:sb.max},warOver:w.over};
+  w.over=w.units[loser].every(u=>u.eliminated);if(w.over)room.rematchVotes={};let result={...publicWar(room),chosen:{1:a.id,2:b.id},winner,loser,log,finalHp:{1:Math.max(0,hp[0]),2:Math.max(0,hp[1])},maxHp:{1:sa.max,2:sb.max},warOver:w.over};
   room.players.forEach(p=>send(p.ws,'battle_result',{...result,you:p.number}));
   if(w.over)room.players.forEach(p=>send(p.ws,'war_over',{winner,you:p.number,units:w.units}));else w.round++;
 }
