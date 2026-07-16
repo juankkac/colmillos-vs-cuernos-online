@@ -6,9 +6,14 @@ const { WebSocketServer, WebSocket } = require('ws');
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = __dirname;
 const rooms = new Map();
+const validAnimals = new Set(['bufalo','conejo','elefante','ciervo','tortuga','hipopotamo','carnero','jirafa','jabali','camello','koala','caballo','lobo','tigre','zorro','leopardo','mapache','cocodrilo','aguila','escorpion','nutria','murcielago','oso','serpiente','tiburon','delfin','pulpo','pirana','castor','capibara','puercoespin','ardilla','buho','halcon','pantera','rinoceronte']);
 const publicFiles = new Set([
-  'cvc_multijugador.html', 'cvc_online.css', 'cvc_online.js',
-  'intro.jpeg', 'fondo.png'
+  'cvc_multijugador.html', 'cvc_online_v2.css', 'cvc_online_v2.js',
+  'intro.jpeg', 'fondo.png',
+  'exec-7264418b-bbb9-4f93-aade-3cbdadc27595.png',
+  'exec-f436e953-9fee-4356-acf1-9d63ae294270.png',
+  'exec-7154a9e1-6b60-46f0-ab36-97b7d2bed74c.png',
+  'exec-386f48ed-4f0c-4bf1-91b5-1e3e2d9fa75a.png'
 ]);
 
 const types = {
@@ -51,9 +56,9 @@ wss.on('connection', ws => {
     try { message = JSON.parse(raw.toString()); } catch { return send(ws, 'error', { message: 'Mensaje inválido.' }); }
     if (message.type === 'create_room') {
       const code = roomCode();
-      const room = { code, players: [{ ws, name: cleanName(message.name), number: 1 }], created: Date.now() };
+      const room = { code, players: [{ ws, name: cleanName(message.name), number: 1 }], teams: {}, created: Date.now() };
       rooms.set(code, room); ws.roomCode = code; ws.playerNumber = 1;
-      send(ws, 'room_created', roomView(room)); return;
+      send(ws, 'room_created', { ...roomView(room), you: 1 }); return;
     }
     if (message.type === 'join_room') {
       const code = String(message.code || '').trim().toUpperCase();
@@ -61,7 +66,28 @@ wss.on('connection', ws => {
       if (!room) return send(ws, 'error', { message: 'La sala no existe.' });
       if (room.players.length >= 2) return send(ws, 'error', { message: 'La sala ya está completa.' });
       room.players.push({ ws, name: cleanName(message.name), number: 2 });
-      ws.roomCode = code; ws.playerNumber = 2; broadcastRoom(room); return;
+      ws.roomCode = code; ws.playerNumber = 2;
+      send(ws, 'room_joined', { ...roomView(room), you: 2 });
+      room.players.filter(p => p.ws !== ws).forEach(p => send(p.ws, 'room_state', roomView(room))); return;
+    }
+    if (message.type === 'select_team') {
+      const room = rooms.get(ws.roomCode);
+      const team = Array.isArray(message.team) ? [...new Set(message.team)] : [];
+      if (!room || team.length !== 6 || team.some(id => !validAnimals.has(id))) {
+        return send(ws, 'error', { message: 'El equipo debe contener seis animales válidos.' });
+      }
+      room.teams[ws.playerNumber] = team;
+      room.players.forEach(p => send(p.ws, 'team_status', {
+        confirmed: [1, 2].filter(n => Array.isArray(room.teams[n])),
+        you: p.number
+      }));
+      if (room.teams[1] && room.teams[2]) {
+        room.players.forEach(p => send(p.ws, 'teams_locked', {
+          you: p.number,
+          teams: { 1: room.teams[1], 2: room.teams[2] }
+        }));
+      }
+      return;
     }
     if (message.type === 'game_event') {
       const room = rooms.get(ws.roomCode);
