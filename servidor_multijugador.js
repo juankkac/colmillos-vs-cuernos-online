@@ -9,6 +9,22 @@ const rooms = new Map();
 const validAnimals = new Set(['bufalo','conejo','elefante','ciervo','tortuga','hipopotamo','carnero','jirafa','jabali','camello','koala','caballo','lobo','tigre','zorro','leopardo','mapache','cocodrilo','aguila','escorpion','nutria','murcielago','oso','serpiente','tiburon','delfin','pulpo','pirana','castor','capibara','puercoespin','ardilla','buho','halcon','pantera','rinoceronte']);
 const unitRows=[['bufalo',135,12,11,5,3,'Guardián'],['conejo',70,10,4,20,1,'Ágil'],['elefante',150,12,13,5,3,'Guardián'],['ciervo',82,12,6,17,1,'Armonioso'],['tortuga',140,9,14,4,3,'Guardián'],['hipopotamo',138,12,11,7,3,'Territorial'],['carnero',98,14,10,8,2,'Territorial'],['jirafa',86,9,8,15,1,'Armonioso'],['jabali',105,17,8,12,2,'Adaptable'],['camello',100,11,8,12,1,'Armonioso'],['koala',88,9,11,8,1,'Armonioso'],['caballo',95,12,6,20,1,'Ágil'],['lobo',92,18,6,16,2,'Cazador'],['tigre',102,21,6,16,2,'Emboscador'],['zorro',70,13,4,20,1,'Ágil'],['leopardo',90,21,6,16,2,'Emboscador'],['mapache',72,13,4,20,1,'Adaptable'],['cocodrilo',122,17,11,8,3,'Territorial'],['aguila',68,13,4,24,1,'Cazador'],['escorpion',92,17,8,12,2,'Emboscador'],['nutria',86,12,6,16,1,'Adaptable'],['murcielago',70,12,4,20,1,'Emboscador'],['oso',138,17,11,8,3,'Territorial'],['serpiente',70,17,4,20,1,'Emboscador'],['tiburon',105,20,7,16,2,'Cazador'],['delfin',92,11,8,18,1,'Guardián'],['pulpo',88,12,8,13,1,'Emboscador'],['pirana',68,16,4,21,1,'Cazador'],['castor',120,10,12,9,3,'Guardián'],['capibara',105,8,9,11,1,'Armonioso'],['puercoespin',118,11,13,8,3,'Guardián'],['ardilla',66,11,4,23,1,'Ágil'],['buho',76,12,6,19,1,'Cazador'],['halcon',82,18,5,22,2,'Cazador'],['pantera',94,20,6,18,2,'Emboscador'],['rinoceronte',148,14,13,7,3,'Territorial']];
 const unitData=Object.fromEntries(unitRows.map(r=>[r[0],{id:r[0],hp:r[1],atk:r[2],def:r[3],spd:r[4],lives:r[5],instinct:r[6]}]));
+const roleNames=['Tanque','Ágil','Tanque','Ágil','Tanque','Tanque','Daño','Soporte','Daño','Soporte','Soporte','Ágil','Daño','Daño','Ágil','Daño','Soporte','Tanque','Ágil','Daño','Soporte','Soporte','Tanque','Ágil','Daño','Soporte','Soporte','Ágil','Tanque','Soporte','Tanque','Ágil','Soporte','Daño','Daño','Tanque'];
+const instinctNames=['Guardián','Ágil','Guardián','Armonioso','Guardián','Territorial','Territorial','Armonioso','Adaptable','Armonioso','Armonioso','Ágil','Cazador','Emboscador','Ágil','Emboscador','Adaptable','Territorial','Cazador','Emboscador','Adaptable','Emboscador','Territorial','Emboscador','Cazador','Guardián','Emboscador','Cazador','Guardián','Armonioso','Guardián','Ágil','Cazador','Cazador','Emboscador','Territorial'];
+unitRows.forEach((row,index)=>{unitData[row[0]].role=roleNames[index];unitData[row[0]].instinct=instinctNames[index]});
+const terrains=[
+  {id:'sabana',name:'Sabana dorada',icon:'☀️',boost:'Ágil',hurt:'Guardián'},
+  {id:'bosque',name:'Bosque ancestral',icon:'🌲',boost:'Emboscador',hurt:'Cazador'},
+  {id:'montana',name:'Montaña rocosa',icon:'⛰️',boost:'Territorial',hurt:'Ágil'},
+  {id:'pantano',name:'Pantano profundo',icon:'🌿',boost:'Adaptable',hurt:'Armonioso'}
+];
+const weathers=[
+  {id:'despejado',name:'Cielo despejado',icon:'🌤️',boost:'Ágil',hurt:'Tanque'},
+  {id:'lluvia',name:'Lluvia intensa',icon:'🌧️',boost:'Soporte',hurt:'Daño'},
+  {id:'tormenta',name:'Tormenta eléctrica',icon:'⛈️',boost:'Daño',hurt:'Ágil'},
+  {id:'niebla',name:'Niebla espesa',icon:'🌫️',boost:'Tanque',hurt:'Soporte'}
+];
+const randomDifferent=(list,current)=>{const choices=list.filter(x=>x.id!==current);return choices[Math.floor(Math.random()*choices.length)]};
 const beats={Cazador:'Armonioso',Armonioso:'Territorial',Territorial:'Emboscador',Emboscador:'Ágil',Ágil:'Guardián',Guardián:'Cazador'};
 const publicFiles = new Set([
   'cvc_multijugador.html', 'cvc_online_v2.css', 'cvc_online_v2.js',
@@ -103,6 +119,16 @@ wss.on('connection', ws => {
       if(room.war.picks[1]&&room.war.picks[2])resolveOnlineBattle(room);
       return;
     }
+    if(message.type==='reroll_environment'){
+      const room=rooms.get(ws.roomCode),kind=message.kind==='terrain'?'terrain':message.kind==='weather'?'weather':null;
+      if(!room||!room.war||room.war.over||!kind)return;
+      if(room.war.picks[ws.playerNumber])return send(ws,'error',{message:'El reroll debe usarse antes de elegir combatiente.'});
+      if(room.war.rerolls[ws.playerNumber]===room.war.round)return send(ws,'error',{message:'Ya usaste tu reroll de esta ronda.'});
+      room.war.environment[kind]=randomDifferent(kind==='terrain'?terrains:weathers,room.war.environment[kind].id);
+      room.war.rerolls[ws.playerNumber]=room.war.round;
+      room.players.forEach(p=>send(p.ws,'environment_update',{...publicWar(room),you:p.number,changed:kind,by:ws.playerNumber}));
+      return;
+    }
     if(message.type==='battle_continue'){
       const room=rooms.get(ws.roomCode);if(!room||!room.war||room.war.over)return;
       room.war.continued.add(ws.playerNumber);
@@ -142,13 +168,14 @@ function cleanName(value) {
 
 function initializeWar(room){
   clearTimeout(room.choiceTimer);
-  room.war={round:1,picks:{},previous:{},continued:new Set(),over:false,units:{}};
+  room.war={round:1,picks:{},previous:{},continued:new Set(),over:false,units:{},rerolls:{1:0,2:0},lastWeatherRound:1,environment:{terrain:randomDifferent(terrains),weather:randomDifferent(weathers)}};
   for(const n of [1,2])room.war.units[n]=room.teams[n].map(id=>({...unitData[id],level:1,xp:0,livesLeft:unitData[id].lives,eliminated:false}));
 }
-function publicWar(room){return{round:room.war.round,units:room.war.units,teams:room.teams}}
+function publicWar(room){return{round:room.war.round,units:room.war.units,teams:room.teams,environment:room.war.environment,rerolls:room.war.rerolls}}
 function startChoice(room,seconds){
   if(!rooms.has(room.code)||room.players.length<2||room.war.over)return;
   clearTimeout(room.choiceTimer);room.war.picks={};room.war.continued=new Set();
+  if(room.war.round>1&&room.war.round%2===1&&room.war.lastWeatherRound!==room.war.round){room.war.environment.weather=randomDifferent(weathers,room.war.environment.weather.id);room.war.lastWeatherRound=room.war.round}
   const deadline=Date.now()+seconds*1000;
   room.players.forEach(p=>send(p.ws,'choose_combatant',{...publicWar(room),you:p.number,deadline,seconds}));
   room.choiceTimer=setTimeout(()=>{for(const n of [1,2])if(!room.war.picks[n])room.war.picks[n]=autoCombatant(room,n);resolveOnlineBattle(room)},seconds*1000+100);
@@ -156,16 +183,17 @@ function startChoice(room,seconds){
 function autoCombatant(room,n){let alive=room.war.units[n].filter(u=>!u.eliminated),previous=alive.find(u=>u.id===room.war.previous[n]);return(previous||alive[Math.floor(Math.random()*alive.length)]).id}
 function relation(a,b){if(a.instinct==='Adaptable'||b.instinct==='Adaptable')return 0;if(beats[a.instinct]===b.instinct)return 1;if(beats[b.instinct]===a.instinct)return-1;return 0}
 function gainXp(u,n){u.xp+=n;while(u.xp>=3&&u.level<4){u.xp-=3;u.level++}if(u.level>=4)u.xp=Math.min(u.xp,2)}
+function environmentMultiplier(u,environment){let value=1,notes=[];if(u.instinct===environment.terrain.boost){value+=.08;notes.push('terreno +8%')}if(u.instinct===environment.terrain.hurt){value-=.05;notes.push('terreno -5%')}if(u.role===environment.weather.boost){value+=.06;notes.push('clima +6%')}if(u.role===environment.weather.hurt){value-=.04;notes.push('clima -4%')}return{value,notes}}
 function resolveOnlineBattle(room){
   clearTimeout(room.choiceTimer);let w=room.war;if(!w.picks[1]||!w.picks[2])return;
   let a=w.units[1].find(u=>u.id===w.picks[1]),b=w.units[2].find(u=>u.id===w.picks[2]);w.previous={1:a.id,2:b.id};
-  const scaled=u=>({max:Math.round(u.hp*(1+(u.level-1)*.1)),atk:u.atk*(1+(u.level-1)*.1),def:u.def*(1+(u.level-1)*.1),spd:u.spd*(1+(u.level-1)*.1)}),sa=scaled(a),sb=scaled(b),hp=[sa.max,sb.max],stats=[sa,sb],log=[];
+  const scaled=u=>{let env=environmentMultiplier(u,w.environment);return{max:Math.round(u.hp*(1+(u.level-1)*.1)),atk:u.atk*(1+(u.level-1)*.1)*env.value,def:u.def*(1+(u.level-1)*.1),spd:u.spd*(1+(u.level-1)*.1),environmentMultiplier:env.value,environmentNotes:env.notes}},sa=scaled(a),sb=scaled(b),hp=[sa.max,sb.max],stats=[sa,sb],log=[];
   for(let turn=1;turn<=60&&hp[0]>0&&hp[1]>0;turn++){
     let first=stats[0].spd>=stats[1].spd?0:1;
     for(const i of [first,1-first]){let j=1-i;if(hp[i]<=0||hp[j]<=0)continue;let attacker=i===0?a:b,defender=j===0?a:b,rel=relation(attacker,defender),crit=Math.random()<.12,damage=Math.max(3,Math.round((stats[i].atk*(rel>0?1.15:1)*(crit?1.5:1)-stats[j].def*.4)+(Math.random()*4-2)));hp[j]-=damage;log.push({turn,attacker:attacker.id,defender:defender.id,damage,critical:crit,hp:Math.max(0,hp[j]),max:stats[j].max})}
   }
   let loser=hp[0]<=0?1:2,winner=loser===1?2:1,L=loser===1?a:b,W=winner===1?a:b;L.livesLeft--;if(L.livesLeft<=0)L.eliminated=true;gainXp(W,2);gainXp(L,1);
-  w.over=w.units[loser].every(u=>u.eliminated);if(w.over)room.rematchVotes={};let result={...publicWar(room),chosen:{1:a.id,2:b.id},winner,loser,log,finalHp:{1:Math.max(0,hp[0]),2:Math.max(0,hp[1])},maxHp:{1:sa.max,2:sb.max},warOver:w.over};
+  w.over=w.units[loser].every(u=>u.eliminated);if(w.over)room.rematchVotes={};let result={...publicWar(room),chosen:{1:a.id,2:b.id},winner,loser,log,finalHp:{1:Math.max(0,hp[0]),2:Math.max(0,hp[1])},maxHp:{1:sa.max,2:sb.max},environmentEffects:{1:{multiplier:sa.environmentMultiplier,notes:sa.environmentNotes},2:{multiplier:sb.environmentMultiplier,notes:sb.environmentNotes}},warOver:w.over};
   room.players.forEach(p=>send(p.ws,'battle_result',{...result,you:p.number}));
   if(w.over)room.players.forEach(p=>send(p.ws,'war_over',{winner,you:p.number,units:w.units}));else w.round++;
 }
